@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Specialist Formwork \u0026 Steel Fixing AIQS Hub",
+  "description": "Comprehensive construction quantity takeoff and estimation hub for formwork, steel fixing, and concrete, featuring imperial/metric conversions and cost analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
