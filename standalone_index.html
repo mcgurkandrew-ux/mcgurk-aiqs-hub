@@ -47,6 +47,12 @@
             .btn-primary { @apply w-full py-3 bg-brand-accent hover:bg-[#ffdf18] text-black font-bold rounded border-b-4 border-[#b99511] active:border-b-0 active:translate-y-[2px] transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg; }
             .btn-steel { @apply w-full py-3 bg-steel-blue hover:bg-[#5a9ad1] text-white font-bold rounded border-b-4 border-[#2b5171] active:border-b-0 active:translate-y-[2px] transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg; }
             .btn-secondary { @apply w-full py-2 border border-slate-700 text-slate-300 font-medium rounded text-sm hover:bg-slate-800 transition-all flex items-center justify-center gap-2; }
+            
+            @keyframes bounce-subtle {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-4px); }
+            }
+            .animate-bounce-subtle { animation: bounce-subtle 3s ease-in-out infinite; }
         }
 
         @media print {
@@ -199,13 +205,32 @@
         // --- Components ---
         function SteelFixingHub({ projectMeta, onPrint, language, currency, unitSystem }) {
             const [documents, setDocuments] = useState([]);
-            const [schedule, setSchedule] = useState([]);
+            const [schedule, setSchedule] = useState(() => {
+                const saved = localStorage.getItem('mcgurk_rebar_schedule');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [newItem, setNewItem] = useState({ barMark: '', size: '12', length: 1, count: 1 });
             const [wastagePercent, setWastagePercent] = useState(5);
             const isImperial = unitSystem === 'imperial';
             const t = (key) => TRANSLATIONS[language][key] || key;
             const currencySymbol = CURRENCY_SYMBOLS[currency];
             const weightUnit = isImperial ? 'lbs' : 'kg';
             const lengthUnit = isImperial ? 'ft' : 'm';
+
+            useEffect(() => {
+                localStorage.setItem('mcgurk_rebar_schedule', JSON.stringify(schedule));
+            }, [schedule]);
+
+            const addItem = () => {
+                if (!newItem.barMark || !newItem.length || !newItem.count) return;
+                const weightPerM = REBAR_WEIGHTS[newItem.size] || 0.888;
+                const totalWeight = newItem.length * newItem.count * weightPerM * (isImperial ? 0.3048 * 2.20462 : 1);
+                const item = { ...newItem, id: Math.random().toString(36).substr(2, 9), totalWeight };
+                setSchedule(prev => [...prev, item]);
+                setNewItem({ barMark: '', size: '12', length: 1, count: 1 });
+            };
+
+            const deleteItem = (id) => setSchedule(prev => prev.filter(item => item.id !== id));
 
             const handleFileUpload = (e) => {
                 const file = e.target.files?.[0];
@@ -225,30 +250,46 @@
             }, [schedule, wastagePercent, isImperial]);
 
             return (
-                <div className="flex-1 flex flex-col">
-                    <header className="h-16 bg-[#1e293b] border-b border-brand-border flex items-center justify-between px-8">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-steel-blue text-white rounded shadow-sm"><SteelNipsIcon className="w-5 h-5" /></div>
-                            <h2 className="text-lg font-bold text-white uppercase">{isImperial ? 'US Rebar Hub' : 'Steel Fixing Hub'}</h2>
-                        </div>
-                        <button onClick={onPrint} className="btn-secondary w-auto px-4">
-                            <Tooltip content="Download PDF BOQ Report" position="bottom">
-                                <span className="flex items-center gap-2"><Printer size={16} /> {t('export_pdf')}</span>
-                            </Tooltip>
-                        </button>
-                    </header>
-                    <div className="p-8 space-y-8 flex-1 overflow-y-auto">
-                        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="card-dark p-8 flex flex-col items-center justify-center border-dashed border-2 gap-4 relative group">
-                                <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} title="Upload Rebar Schedule"/>
+                <div className="space-y-8 animate-in fade-in duration-500">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="card-dark p-6 space-y-6">
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Calculator size={16} className="text-brand-accent"/> Manual Rebar Entry
+                                </h3>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Bar Mark</label>
+                                        <input type="text" className="input-field" placeholder="e.g. 01" value={newItem.barMark} onChange={e => setNewItem({...newItem, barMark: e.target.value})}/>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Size</label>
+                                        <select className="input-field" value={newItem.size} onChange={e => setNewItem({...newItem, size: e.target.value})}>
+                                            {Object.keys(REBAR_WEIGHTS).map(size => <option key={size} value={size}>{isImperial && !size.startsWith('#') ? '#' + size : size}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Length ({lengthUnit})</label>
+                                        <input type="number" className="input-field" value={newItem.length} onChange={e => setNewItem({...newItem, length: Number(e.target.value)})}/>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] text-slate-500 uppercase font-bold">Count</label>
+                                        <input type="number" className="input-field" value={newItem.count} onChange={e => setNewItem({...newItem, count: Number(e.target.value)})}/>
+                                    </div>
+                                </div>
+                                <button onClick={addItem} className="btn-steel h-12">Add To Schedule</button>
+                            </div>
+                            <div className="card-dark p-8 flex flex-col items-center justify-center border-dashed border-2 border-slate-800 gap-4 relative group hover:border-brand-accent transition-colors">
+                                <input type="file" accept="image/*,application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileUpload} title="Upload Rebar Schedule"/>
                                 <Tooltip content="Upload PDF or Image of Rebar Schedule for AI extraction" position="top">
                                     <div className="flex flex-col items-center gap-4">
-                                        <Upload size={40} className="text-steel-blue" />
+                                        <Upload size={40} className="text-steel-blue group-hover:scale-110 transition-transform" />
                                         <h3 className="text-lg font-bold text-white uppercase">UPLOAD REBAR SCHEDULE</h3>
+                                        <p className="text-xs text-slate-500">Fast AI extraction of bending schedules</p>
                                     </div>
                                 </Tooltip>
                             </div>
                         </section>
+
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <Tooltip content={`Gross weight including ${wastagePercent}% site wastage`} position="right">
                                 <div className="card-dark p-6 border-l-4 border-l-steel-blue hover:bg-slate-800/20 transition-colors cursor-help">
@@ -256,21 +297,86 @@
                                     <div className="text-2xl font-mono text-white font-bold">{boq.totalWeight.toFixed(1)} {weightUnit}</div>
                                 </div>
                             </Tooltip>
+                            <div className="card-dark p-6 border-l-4 border-l-amber-500">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">SPACERS (EST)</div>
+                                <div className="text-2xl font-mono text-white font-bold">{boq.spacers} PCS</div>
+                            </div>
+                            <div className="card-dark p-6 border-l-4 border-l-slate-500">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">TYING WIRE</div>
+                                <div className="text-2xl font-mono text-white font-bold">{boq.tyingWireRolls} ROLLS</div>
+                            </div>
+                            <div className="card-dark p-6 border-l-4 border-l-red-500">
+                                <div className="text-[10px] text-slate-500 uppercase font-bold">WASTAGE ({wastagePercent}%)</div>
+                                <div className="text-2xl font-mono text-white font-bold">{boq.wastage.toFixed(1)} {weightUnit}</div>
+                            </div>
                         </div>
+
+                        {schedule.length > 0 && (
+                            <div className="card-dark">
+                                <div className="p-4 bg-brand-panel border-b border-brand-border flex items-center justify-between">
+                                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Bending Schedule List</h3>
+                                    <button onClick={() => setSchedule([])} className="text-[10px] text-red-500 uppercase font-bold flex items-center gap-1 hover:underline">
+                                        <Trash2 size={12}/> Clear All
+                                    </button>
+                                </div>
+                                <table className="w-full text-left text-sm">
+                                    <thead className="text-[10px] text-slate-500 uppercase font-bold border-b border-brand-border">
+                                        <tr>
+                                            <th className="p-4">Mark</th>
+                                            <th className="p-4">Size</th>
+                                            <th className="p-4">Length</th>
+                                            <th className="p-4">No.</th>
+                                            <th className="p-4 text-right">Weight</th>
+                                            <th className="p-4 text-right">Act.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {schedule.map(item => (
+                                            <tr key={item.id} className="hover:bg-slate-800/10">
+                                                <td className="p-4 font-bold">{item.barMark}</td>
+                                                <td className="p-4">{isImperial && !item.size.startsWith('#') ? '#' + item.size : item.size}</td>
+                                                <td className="p-4">{item.length.toFixed(2)}{lengthUnit}</td>
+                                                <td className="p-4">{item.count}</td>
+                                                <td className="p-4 text-right font-mono">{item.totalWeight.toFixed(2)}{weightUnit}</td>
+                                                <td className="p-4 text-right">
+                                                    <button onClick={() => deleteItem(item.id)} className="p-2 hover:bg-red-500/10 text-red-500 rounded transition-colors"><Trash2 size={14}/></button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
                 </div>
             );
         }
 
         function App() {
-            const [activeHub, setActiveHub] = useState('formwork');
+            const [activeTab, setActiveTab] = useState(() => localStorage.getItem('mcgurk_tab') || 'formwork');
             const [language, setLanguage] = useState('en');
             const [currency, setCurrency] = useState('GBP');
-            const [projectMeta, setProjectMeta] = useState({ name: '', location: '' });
-            const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-            const [dims, setDims] = useState({ length: 10, height: 3, thickness: 0.3, unitSystem: 'metric', imperial: { lengthFt: 32, lengthIn: 10, heightFt: 9, heightIn: 10, thicknessIn: 12 } });
+            const [projectMeta, setProjectMeta] = useState(() => {
+                const saved = localStorage.getItem('mcgurk_meta');
+                return saved ? JSON.parse(saved) : { name: '', location: '' };
+            });
+            const [showCopySuccess, setShowCopySuccess] = useState(false);
+            const [dims, setDims] = useState(() => {
+                const saved = localStorage.getItem('mcgurk_dims');
+                return saved ? JSON.parse(saved) : { length: 10, height: 3, thickness: 0.3, unitSystem: 'metric', imperial: { lengthFt: 32, lengthIn: 10, heightFt: 9, heightIn: 10, thicknessIn: 12 } };
+            });
             const [settings, setSettings] = useState({ plywoodWastage: 20, concreteWastage: 5, reinforcementRatio: 120, dywiBarSpacing: 0.6 });
-            const [unitCosts, setUnitCosts] = useState({ concrete: 125, plywood_sheets: 45, primary_timber: 4.5, secondary_timber: 3.2, steel: 1.85, dywi_bars: 12, hardware: 1.2, agent: 5.5 });
+            const [unitCosts, setUnitCosts] = useState(() => {
+                const saved = localStorage.getItem('mcgurk_costs');
+                return saved ? JSON.parse(saved) : { concrete: 125, plywood_sheets: 45, primary_timber: 4.5, secondary_timber: 3.2, steel: 1.85, dywi_bars: 12, hardware: 1.2, agent: 5.5 };
+            });
+
+            useEffect(() => {
+                localStorage.setItem('mcgurk_tab', activeTab);
+                localStorage.setItem('mcgurk_meta', JSON.stringify(projectMeta));
+                localStorage.setItem('mcgurk_dims', JSON.stringify(dims));
+                localStorage.setItem('mcgurk_costs', JSON.stringify(unitCosts));
+            }, [activeTab, projectMeta, dims, unitCosts]);
 
             const t = (key) => TRANSLATIONS[language]?.[key] || key;
             const currencySymbol = CURRENCY_SYMBOLS[currency];
@@ -299,146 +405,248 @@
             };
 
             return (
-                <div className="min-h-screen flex bg-brand-bg text-slate-200">
-                    <aside className={`no-print sidebar-container w-72 fixed left-0 top-0 bottom-0 z-20 transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                        <div className="p-6 h-full flex flex-col gap-8 overflow-y-auto">
-                        <div className="flex bg-brand-bg p-1 rounded-lg border border-slate-800">
-                                <Tooltip content="Switch to Formwork & Concrete Hub" position="bottom" className="flex-1">
-                                    <button onClick={() => setActiveHub('formwork')} className={`w-full py-2 rounded transition-colors ${activeHub === 'formwork' ? 'bg-brand-accent text-black' : 'text-slate-500 hover:text-slate-300'}`}><HammerSawIcon className="w-5 h-5 mx-auto"/></button>
-                                </Tooltip>
-                                <Tooltip content="Switch to Rebar & Steel Fixing Hub" position="bottom" className="flex-1">
-                                    <button onClick={() => setActiveHub('steel')} className={`w-full py-2 rounded transition-colors ${activeHub === 'steel' ? 'bg-steel-blue text-white' : 'text-slate-500 hover:text-slate-300'}`}><SteelNipsIcon className="w-5 h-5 mx-auto"/></button>
-                                </Tooltip>
-                            </div>
-                            <h1 className="text-xl font-bold">McGurk AIQS Hub</h1>
-                            <div className="space-y-4">
-                                <Tooltip content="Enter project name for reports" position="right">
-                                    <input className="input-field" placeholder="Project Name" value={projectMeta.name} onChange={e => setProjectMeta({...projectMeta, name: e.target.value})}/>
-                                </Tooltip>
-                                <Tooltip content="Enter site location" position="right">
-                                    <input className="input-field" placeholder="Location" value={projectMeta.location} onChange={e => setProjectMeta({...projectMeta, location: e.target.value})}/>
-                                </Tooltip>
-                            </div>
-                            <div className="mt-auto p-4 bg-brand-panel rounded-lg border border-slate-800">
-                                <Tooltip content="Total project estimation summary" position="top">
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold">Total Estimate</div>
-                                    <div className="text-2xl font-mono text-white">{formatPrice(grandTotal)}</div>
-                                </Tooltip>
-                            </div>
+                <div className="min-h-screen flex flex-col bg-brand-bg text-slate-200 font-sans">
+                    {/* Simplified Header Navigation */}
+                    <header className="sticky top-0 z-50 bg-brand-sidebar border-b border-brand-border px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-brand-accent text-black rounded font-black text-xs">AIQS</div>
+                            <h1 className="text-sm font-bold tracking-tight uppercase">McGurk Hub</h1>
                         </div>
-                    </aside>
 
-                    <main className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}>
-                        <header className="h-16 border-b border-brand-border flex items-center justify-between px-8 bg-brand-sidebar">
-                            <Tooltip content={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"} position="right">
-                                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1 hover:bg-slate-800 rounded transition-colors"><ChevronRight size={20} className={isSidebarOpen ? 'rotate-180' : ''}/></button>
-                            </Tooltip>
-                            <div className="flex bg-brand-bg p-1 rounded border border-slate-800">
-                                <Tooltip content="Switch to US Feet/Inches system" position="bottom">
-                                    <button onClick={() => handleDimChange('unitSystem', 'imperial')} className={`px-4 py-1 text-[11px] font-bold rounded transition-colors ${dims.unitSystem === 'imperial' ? 'bg-brand-accent text-black' : 'text-slate-500 hover:text-slate-300'}`}>IMPERIAL</button>
-                                </Tooltip>
-                                <Tooltip content="Switch to International Metric system" position="bottom">
-                                    <button onClick={() => handleDimChange('unitSystem', 'metric')} className={`px-4 py-1 text-[11px] font-bold rounded transition-colors ${dims.unitSystem === 'metric' ? 'bg-brand-accent text-black' : 'text-slate-500 hover:text-slate-300'}`}>METRIC</button>
-                                </Tooltip>
-                            </div>
-                        </header>
+                        <div className="flex bg-brand-bg p-1 rounded-lg border border-slate-800 w-full sm:w-auto overflow-x-auto no-scrollbar">
+                            <button onClick={() => setActiveTab('formwork')} className={`flex-1 sm:px-6 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'formwork' ? 'bg-brand-accent text-black' : 'text-slate-500 hover:text-slate-300'}`}>Formwork</button>
+                            <button onClick={() => setActiveTab('steel')} className={`flex-1 sm:px-6 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'steel' ? 'bg-steel-blue text-white' : 'text-slate-500 hover:text-slate-300'}`}>Steel</button>
+                            <button onClick={() => setActiveTab('settings')} className={`flex-1 sm:px-6 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'settings' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Config</button>
+                            <button onClick={() => setActiveTab('export')} className={`flex-1 sm:px-6 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${activeTab === 'export' ? 'bg-green-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>Export Code</button>
+                        </div>
 
-                        {activeHub === 'steel' ? (
-                            <SteelFixingHub projectMeta={projectMeta} onPrint={window.print} language={language} currency={currency} unitSystem={dims.unitSystem}/>
-                        ) : (
-                            <div className="p-8 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="card-dark p-5 space-y-2">
-                                        <Tooltip content={`Total running length of the structure in ${dims.unitSystem === 'metric' ? 'meters' : 'ft/in'}`} position="top">
-                                            <label className="text-xs uppercase text-slate-500">{t('length')}</label>
-                                        </Tooltip>
+                        <div className="hidden lg:flex items-center gap-4 bg-brand-panel px-4 py-2 rounded-full border border-slate-800">
+                             <span className="text-[10px] text-slate-500 font-bold uppercase">Total</span>
+                             <span className="text-sm font-mono text-white font-black">{formatPrice(grandTotal)}</span>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 max-w-6xl mx-auto w-full p-4 sm:p-8">
+                        {activeTab === 'formwork' && (
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="card-dark p-5 border-t-2 border-brand-accent">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">{t('length')}</label>
+                                            <div className="flex bg-brand-bg rounded p-0.5 border border-slate-800">
+                                                <button onClick={() => handleDimChange('unitSystem', 'imperial')} className={`px-2 py-0.5 text-[8px] font-bold rounded ${dims.unitSystem === 'imperial' ? 'bg-brand-accent text-black' : 'text-slate-500'}`}>IMP</button>
+                                                <button onClick={() => handleDimChange('unitSystem', 'metric')} className={`px-2 py-0.5 text-[8px] font-bold rounded ${dims.unitSystem === 'metric' ? 'bg-brand-accent text-black' : 'text-slate-500'}`}>MET</button>
+                                            </div>
+                                        </div>
                                         {dims.unitSystem === 'metric' ? (
-                                            <Tooltip content="Length in meters" position="bottom">
-                                                <input type="number" className="input-field-amber" value={dims.length} onChange={e => handleDimChange('length', e.target.value)}/>
-                                            </Tooltip>
+                                            <input type="number" className="input-field-amber text-xl" value={dims.length} onChange={e => handleDimChange('length', e.target.value)}/>
                                         ) : (
                                             <div className="grid grid-cols-2 gap-2">
-                                                <Tooltip content="Feet" position="bottom">
+                                                <div className="relative">
                                                     <input type="number" className="input-field-amber" value={dims.imperial.lengthFt} onChange={e => handleDimChange('imperial.lengthFt', e.target.value)}/>
-                                                </Tooltip>
-                                                <Tooltip content="Inches" position="bottom">
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-bold">FT</span>
+                                                </div>
+                                                <div className="relative">
                                                     <input type="number" className="input-field-amber" value={dims.imperial.lengthIn} onChange={e => handleDimChange('imperial.lengthIn', e.target.value)}/>
-                                                </Tooltip>
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-bold">IN</span>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="card-dark p-5 space-y-2">
-                                        <Tooltip content={`Total vertical height of the structure in ${dims.unitSystem === 'metric' ? 'meters' : 'ft/in'}`} position="top">
-                                            <label className="text-xs uppercase text-slate-500">{t('height')}</label>
-                                        </Tooltip>
+                                    
+                                    <div className="card-dark p-5 border-t-2 border-brand-accent">
+                                        <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mb-4 block">{t('height')}</label>
                                         {dims.unitSystem === 'metric' ? (
-                                            <Tooltip content="Height in meters" position="bottom">
-                                                <input type="number" className="input-field-amber" value={dims.height} onChange={e => handleDimChange('height', e.target.value)}/>
-                                            </Tooltip>
+                                            <input type="number" className="input-field-amber text-xl" value={dims.height} onChange={e => handleDimChange('height', e.target.value)}/>
                                         ) : (
                                             <div className="grid grid-cols-2 gap-2">
-                                                <Tooltip content="Feet" position="bottom">
+                                                <div className="relative">
                                                     <input type="number" className="input-field-amber" value={dims.imperial.heightFt} onChange={e => handleDimChange('imperial.heightFt', e.target.value)}/>
-                                                </Tooltip>
-                                                <Tooltip content="Inches" position="bottom">
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-bold">FT</span>
+                                                </div>
+                                                <div className="relative">
                                                     <input type="number" className="input-field-amber" value={dims.imperial.heightIn} onChange={e => handleDimChange('imperial.heightIn', e.target.value)}/>
-                                                </Tooltip>
+                                                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-bold">IN</span>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="card-dark p-5 space-y-2">
-                                        <Tooltip content={`Wall or slab thickness in ${dims.unitSystem === 'metric' ? 'meters' : 'inches'}`} position="top">
-                                            <label className="text-xs uppercase text-slate-500">{t('thickness')}</label>
-                                        </Tooltip>
+
+                                    <div className="card-dark p-5 border-t-2 border-brand-accent">
+                                        <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mb-4 block">{t('thickness')}</label>
                                         {dims.unitSystem === 'metric' ? (
-                                            <Tooltip content="Thickness in meters" position="bottom">
-                                                <input type="number" step="0.05" className="input-field-amber" value={dims.thickness} onChange={e => handleDimChange('thickness', e.target.value)}/>
-                                            </Tooltip>
+                                            <input type="number" step="0.05" className="input-field-amber text-xl" value={dims.thickness} onChange={e => handleDimChange('thickness', e.target.value)}/>
                                         ) : (
-                                            <Tooltip content="Thickness in inches" position="bottom">
+                                            <div className="relative">
                                                 <input type="number" className="input-field-amber" value={dims.imperial.thicknessIn} onChange={e => handleDimChange('imperial.thicknessIn', e.target.value)}/>
-                                            </Tooltip>
+                                                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-600 font-bold">IN</span>
+                                            </div>
                                         )}
+                                    </div>
+
+                                    <div className="card-dark p-5 bg-brand-panel flex flex-col justify-center">
+                                        <div className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Total BOQ</div>
+                                        <div className="text-2xl font-mono text-brand-accent font-black">{formatPrice(grandTotal)}</div>
                                     </div>
                                 </div>
-                                <div className="card-dark overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead>
-                                            <tr className="bg-brand-panel border-b border-brand-border">
-                                                <Tooltip content="Description of material or labor item" position="bottom">
-                                                    <th className="p-4 text-[11px] font-bold text-slate-400 uppercase">ITEM</th>
-                                                </Tooltip>
-                                                <Tooltip content="Calculated quantity based on dimensions and site factors" position="bottom">
-                                                    <th className="p-4 text-[11px] font-bold text-slate-400 uppercase">QTY</th>
-                                                </Tooltip>
-                                                <Tooltip content="Current market rate for this item (Click to edit)" position="bottom">
-                                                    <th className="p-4 text-[11px] font-bold text-slate-400 uppercase">UNIT COST ({currencySymbol})</th>
-                                                </Tooltip>
-                                                <Tooltip content="Total cost excluding VAT/GST" position="bottom">
-                                                    <th className="p-4 text-[11px] font-bold text-slate-400 text-right uppercase">TOTAL</th>
-                                                </Tooltip>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-sm divide-y divide-slate-800/50">
-                                            {boqItems.map(item => (
-                                                <tr key={item.id} className="hover:bg-slate-800/20">
-                                                    <td className="p-4">
-                                                        <Tooltip content={item.description} position="right">
-                                                            <span className="cursor-help font-medium">{item.name}</span>
-                                                        </Tooltip>
-                                                        <br/><span className="text-[10px] text-slate-500">{item.description}</span>
-                                                    </td>
-                                                    <td className="p-4 font-mono">{item.quantity.toFixed(2)} {item.unit}</td>
-                                                    <td className="p-4">
-                                                        <Tooltip content="Override unit cost" position="right">
-                                                            <input type="number" className="bg-transparent border-b border-slate-700 w-20 px-1 font-mono text-brand-accent focus:border-brand-accent transition-colors" value={unitCosts[item.id]} onChange={e => setUnitCosts({...unitCosts, [item.id]: Number(e.target.value)})}/>
-                                                        </Tooltip>
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono font-bold text-white tracking-wider">{formatPrice(item.totalCost)}</td>
+
+                                <div className="card-dark overflow-hidden border-slate-800">
+                                    <div className="p-4 bg-brand-panel border-b border-brand-border flex items-center justify-between">
+                                         <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bill of Quantities</h3>
+                                         <button onClick={() => window.print()} className="px-3 py-1 bg-slate-800 hover:bg-slate-700 rounded text-[10px] font-bold flex items-center gap-2 transition-colors">
+                                             <Printer size={12}/> Print PDF
+                                         </button>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left truncate">
+                                            <thead className="bg-brand-bg/50 text-[9px] text-slate-500 uppercase tracking-wider font-black">
+                                                <tr>
+                                                    <th className="p-4">Item & Specification</th>
+                                                    <th className="p-4">Quantity</th>
+                                                    <th className="p-4">Rate ({currencySymbol})</th>
+                                                    <th className="p-4 text-right">Total</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800/50">
+                                                {boqItems.map(item => (
+                                                    <tr key={item.id} className="hover:bg-slate-800/20 group transition-colors">
+                                                        <td className="p-4">
+                                                            <div className="text-xs font-bold text-slate-200">{item.name}</div>
+                                                            <div className="text-[9px] text-slate-500 uppercase mt-0.5">{item.description}</div>
+                                                        </td>
+                                                        <td className="p-4 font-mono text-xs">{item.quantity.toFixed(2)} <span className="text-slate-500 ml-1">{item.unit}</span></td>
+                                                        <td className="p-4 whitespace-nowrap">
+                                                            <input type="number" 
+                                                                className="bg-brand-bg/50 border border-slate-800 rounded px-2 py-1 w-20 text-[11px] font-mono text-brand-accent focus:border-brand-accent outline-none" 
+                                                                value={unitCosts[item.id]} 
+                                                                onChange={e => setUnitCosts({...unitCosts, [item.id]: Number(e.target.value)})}
+                                                            />
+                                                        </td>
+                                                        <td className="p-4 text-right font-mono text-xs font-bold text-white whitespace-nowrap">{formatPrice(item.totalCost)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'steel' && (
+                            <SteelFixingHub projectMeta={projectMeta} onPrint={window.print} language={language} currency={currency} unitSystem={dims.unitSystem}/>
+                        )}
+
+                        {activeTab === 'settings' && (
+                            <div className="max-w-xl mx-auto space-y-6">
+                                <div className="card-dark p-8 space-y-8 border-t-2 border-slate-600 shadow-3xl">
+                                    <h2 className="text-lg font-black uppercase tracking-tighter">Global Config</h2>
+                                    
+                                    <div className="space-y-4">
+                                         <div className="space-y-1">
+                                             <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Project Name</label>
+                                             <input className="input-field h-12" value={projectMeta.name} onChange={e => setProjectMeta({...projectMeta, name: e.target.value})} placeholder="e.g. Tower A - Foundation"/>
+                                         </div>
+                                         <div className="space-y-1">
+                                             <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Site Location</label>
+                                             <input className="input-field h-12" value={projectMeta.location} onChange={e => setProjectMeta({...projectMeta, location: e.target.value})} placeholder="e.g. London, UK"/>
+                                         </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Currency</label>
+                                            <select className="input-field h-12" value={currency} onChange={e => setCurrency(e.target.value)}>
+                                                {Object.keys(CURRENCY_SYMBOLS).map(c => <option key={c} value={c}>{c} ({CURRENCY_SYMBOLS[c]})</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Language</label>
+                                            <select className="input-field h-12" value={language} onChange={e => setLanguage(e.target.value)}>
+                                                <option value="en">English</option>
+                                                <option value="fr">Français</option>
+                                                <option value="es">Español</option>
+                                                <option value="it">Italiano</option>
+                                                <option value="zh">中文</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-4 border border-red-900/30 text-red-500 text-[10px] font-black uppercase tracking-widest rounded hover:bg-red-500/5 transition-all">Clear All Data</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'export' && (
+                            <div className="space-y-6">
+                                {/* New Large Download Button for iPad/Mobile Users */}
+                                <div className="card-dark border-brand-accent animate-bounce-subtle">
+                                    <button 
+                                        onClick={() => {
+                                            const source = document.documentElement.outerHTML;
+                                            const blob = new Blob([source], { type: 'text/html' });
+                                            const url = URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'index.html';
+                                            document.body.appendChild(a);
+                                            a.click();
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                            
+                                            setShowCopySuccess(true);
+                                            setTimeout(() => setShowCopySuccess(false), 3000);
+                                        }}
+                                        className="w-full py-8 bg-brand-accent hover:bg-yellow-400 text-black font-black text-xl uppercase tracking-tighter flex flex-col items-center justify-center gap-3 transition-all"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <HardHat size={32} />
+                                            <span>DOWNLOAD APP FILE</span>
+                                        </div>
+                                        <div className="text-[10px] font-bold tracking-widest opacity-70">Best for iPad & iPhone Users</div>
+                                    </button>
+                                </div>
+
+                                <div className="card-dark border-green-900/50">
+                                    <div className="p-6 space-y-4">
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                            <div className="space-y-1 text-center sm:text-left">
+                                                <h2 className="text-sm font-black uppercase tracking-widest text-green-500">Standalone Source Code</h2>
+                                                <p className="text-[10px] text-slate-500 uppercase font-bold">Manual copy-paste (Alternative)</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => {
+                                                    const textarea = document.getElementById('source-textarea');
+                                                    textarea.select();
+                                                    document.execCommand('copy');
+                                                    setShowCopySuccess(true);
+                                                    setTimeout(() => setShowCopySuccess(false), 2000);
+                                                }}
+                                                className={`px-8 py-3 rounded text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all ${showCopySuccess ? 'bg-green-600 text-white' : 'bg-brand-accent text-black hover:bg-yellow-400'}`}
+                                            >
+                                                {showCopySuccess ? <CheckCircle2 size={16}/> : <FileText size={16}/>}
+                                                {showCopySuccess ? 'SCROLL DOWN & COPIED!' : 'CLICK TO COPY SOURCE'}
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="relative">
+                                            <textarea 
+                                                id="source-textarea"
+                                                readOnly
+                                                className="w-full h-80 bg-black/50 border border-slate-800 rounded p-4 font-mono text-[10px] leading-tight text-green-500/80 focus:ring-0 outline-none"
+                                                value={document.documentElement.outerHTML}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-brand-bg/80 pointer-events-none"></div>
+                                        </div>
+
+                                        <div className="p-4 bg-slate-900/50 rounded border border-slate-800/80">
+                                             <h4 className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Info size={12}/> iPad / iPhone Instructions</h4>
+                                             <ol className="text-[10px] text-slate-500 uppercase font-bold space-y-2 list-decimal list-inside">
+                                                 <li>Tap the large yellow <span className="text-brand-accent">"DOWNLOAD APP FILE"</span> button above.</li>
+                                                 <li>The file <code className="text-white px-1">index.html</code> will be saved to your iPad "Files" app.</li>
+                                                 <li>You can now open this file in any browser or upload it to Vercel/GitHub.</li>
+                                                                                              </ol>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
