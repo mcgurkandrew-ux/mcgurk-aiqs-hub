@@ -32,7 +32,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Dimensions, UnitSystem, ProjectSettings, DEFAULT_SETTINGS, BOQItem, SiteDocument, ProjectState, Language, Currency } from './types';
 import { calculateBOQ, convertToMetric, parseFeetInches } from './utils/calculations';
-import { analyzeDrawing, visualAudit } from './services/aiService';
+import { analyzeDrawing, visualAudit } from './utils/aiService';
 import SteelFixingHub from './components/SteelFixingHub';
 import { TRANSLATIONS, CURRENCY_SYMBOLS, EXCHANGE_RATES } from './constants/translations';
 import { HammerSawIcon, SteelNipsIcon } from './components/CustomIcons';
@@ -200,7 +200,7 @@ export default function App() {
     setIsAnalyzing(true);
     setAnalysisStatus('scanning');
     if (doc.type === 'drawing') {
-      import('./services/aiService').then(async ({ analyzeDrawing }) => {
+      import('./utils/aiService').then(async ({ analyzeDrawing }) => {
         const result = await analyzeDrawing(doc.url);
         if (result) {
           setReviewData(result);
@@ -212,7 +212,7 @@ export default function App() {
       });
     } else {
       const summary = boqItems.map(i => `${i.name}: ${i.quantity} ${i.unit}`).join('\n');
-      import('./services/aiService').then(async ({ visualAudit }) => {
+      import('./utils/aiService').then(async ({ visualAudit }) => {
         const result = await visualAudit(doc.url, summary);
         setAuditResult(result);
         setAnalysisStatus('idle');
@@ -245,7 +245,7 @@ export default function App() {
 
     setIsAnalyzing(true);
     setAnalysisStatus('scanning');
-    import('./services/aiService').then(async ({ compareSiteToDrawing }) => {
+    import('./utils/aiService').then(async ({ compareSiteToDrawing }) => {
       const result = await compareSiteToDrawing(drawing.url, photo.url);
       setAuditResult(result);
       setAnalysisStatus('idle');
